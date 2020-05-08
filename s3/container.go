@@ -274,15 +274,18 @@ type toOverwrite struct {
 	contentDisposition *string
 }
 
-//todo: clean metadata from overwrites
+//todo: clean overwrites from metadata
+//in order to update s3 upload inputs we need to extract the data from the metadata and set it to overwrite.
+//this function should be extended if more upload inputs need overwriting.
 func metadataOverwrite(md map[string]*string) toOverwrite {
 	var to toOverwrite
 	for key, value := range md {
-		switch key {
-		case "Content-Type":
+		k := strings.ToLower(key)
+		switch k {
+		case "content-type":
 			to.contentType = value
 			continue
-		case "Content-Disposition":
+		case "content-disposition":
 			to.contentDisposition = value
 			continue
 		}
