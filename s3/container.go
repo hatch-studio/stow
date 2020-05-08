@@ -114,12 +114,14 @@ func (c *container) Put(name string, r io.Reader, size int64, metadata map[strin
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create or update item, preparing metadata")
 	}
-
+	to := metadataOverwrite(mdPrepped)
 	uploader := s3manager.NewUploaderWithClient(c.client)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:   aws.String(c.name), // Required
 		Key:      aws.String(name),   // Required
 		Body:     r,
+		ContentType: to.contentType,
+		ContentDisposition: to.contentDisposition,
 		Metadata: mdPrepped, // map[string]*string
 	})
 
@@ -265,4 +267,28 @@ func parseMetadata(md map[string]*string) (map[string]interface{}, error) {
 		m[k] = *value
 	}
 	return m, nil
+}
+
+type toOverwrite struct {
+	contentType *string
+	contentDisposition *string
+}
+
+//todo: clean overwrites from metadata
+//in order to update s3 upload inputs we need to extract the data from the metadata and set it to overwrite.
+//this function should be extended if more upload inputs need overwriting.
+func metadataOverwrite(md map[string]*string) toOverwrite {
+	var to toOverwrite
+	for key, value := range md {
+		k := strings.ToLower(key)
+		switch k {
+		case "content-type":
+			to.contentType = value
+			continue
+		case "content-disposition":
+			to.contentDisposition = value
+			continue
+		}
+	}
+	return to
 }
