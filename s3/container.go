@@ -110,11 +110,11 @@ func (c *container) RemoveItem(id string) error {
 // file, including metadata. Keeping it simple for now.
 func (c *container) Put(name string, r io.Reader, size int64, metadata map[string]interface{}) (stow.Item, error) {
 	// Convert map[string]interface{} to map[string]*string
-	mdPrepped, to, err := prepMetadata(metadata)
+	mdPrepped, err := prepMetadata(metadata)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to create or update item, preparing metadata")
 	}
-
+	to := metadataOverwrite(mdPrepped)
 	uploader := s3manager.NewUploaderWithClient(c.client)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket:   aws.String(c.name), // Required
@@ -244,32 +244,18 @@ func cleanEtag(etag string) string {
 	return etag
 }
 
-type toOverWrite struct {
-	contentType *string
-	contentDisposition *string
-}
-
 // prepMetadata parses a raw map into the native type required by S3 to set metadata (map[string]*string).
 // TODO: validation for key values. This function also assumes that the value of a key value pair is a string.
-func prepMetadata(md map[string]interface{}) (map[string]*string, toOverWrite, error) {
-	var to toOverWrite
+func prepMetadata(md map[string]interface{}) (map[string]*string, error) {
 	m := make(map[string]*string, len(md))
 	for key, value := range md {
 		strValue, valid := value.(string)
 		if !valid {
-			return nil, to, errors.Errorf(`value of key '%s' in metadata must be of type string`, key)
-		}
-		switch key {
-		case "Content-Type":
-			to.contentType = aws.String(strValue)
-			continue
-		case "Content-Disposition":
-			to.contentDisposition = aws.String(strValue)
-			continue
+			return nil, errors.Errorf(`value of key '%s' in metadata must be of type string`, key)
 		}
 		m[key] = aws.String(strValue)
 	}
-	return m, to, nil
+	return m, nil
 }
 
 // The first letter of a dash separated key value is capitalized, so perform a ToLower on it.
@@ -281,4 +267,25 @@ func parseMetadata(md map[string]*string) (map[string]interface{}, error) {
 		m[k] = *value
 	}
 	return m, nil
+}
+
+type toOverwrite struct {
+	contentType *string
+	contentDisposition *string
+}
+
+//todo: clean metadata from overwrites
+func metadataOverwrite(md map[string]*string) toOverwrite {
+	var to toOverwrite
+	for key, value := range md {
+		switch key {
+		case "Content-Type":
+			to.contentType = value
+			continue
+		case "Content-Disposition":
+			to.contentDisposition = value
+			continue
+		}
+	}
+	return to
 }
